@@ -1,0 +1,723 @@
+---
+title: "Report_for_Introduction_to_Bayesian_Analysis_in_R"
+author: "Konstantin Ibadullaev ; 63072"
+date: "8/27/2021"
+output: html_document
+---
+
+```{r setup, include=T}
+
+library(knitr)
+library(dplyr)
+library(magrittr)
+library(extraDistr)
+library("png")
+
+```
+# Task 1. Discretization methods.
+## Problem set.
+Correlating tuff levels.
+Compute the probability of obtaining brown rock from any of 3 tuff levels $Pr[brown]$ on F.
+
+## Initial preparations.
+The provided data presented as number of rocks of 3 different types on each of 3 different levels. There's also provided probability of picking a particular level, 
+i.e that a particular level was selected to obtain any of 3 rock types.
+
+```{r Task 1 Visualize the task}
+# Visualize the task
+
+tsk<- readPNG("task1.png")
+plot.new() 
+rasterImage(tsk,0,0,1,1)
+
+
+```
+
+                                    Figure 1.
+
+## Theoretical background.
+One starts with check of probabilities $Pr[F1], Pr[F2], Pr[F3]$.
+They have to form the full group and be mutual exclusive, i.e 
+$Pr[F1]+ Pr[F2]+ Pr[F3] =1/4+1/2+1/4 = 1$. From that follows,
+that one of 3 levels will be picked.
+
+Mainly, one should implement Bayes formula in order to get any probability of
+obtaining any single particular rock type from a desired level.
+$P[B_i | A] = \frac{P[B_i]P[A|B_i]}{\sum_{i=1}^{n} {P[B_i]P[A|B_i]} }$, where :
+
+* $P[B_i]$ - probability of $Pr[F_i]$
+* $P[B_i]P[A|B_i]$ - likelihood 
+* $\sum_{i=1}^{n} {P[B_i]P[A|B_i]}$ is a probability of a specific rock type, also known
+as $P[A_i] = \sum_{i=1}^{n} {P[B_i]P[A|B_i]}$ .
+
+
+
+## Workflow.
+The last probability is exactly what required for solution. It's worth noting, 
+that one can also find a probability of a specific rock type on a defined level
+using  mentioned formula. But here is solely
+$P[A_i] = \sum_{i=1}^{n} {P[B_i]P[A|B_i]}$ to be computed.
+
+### Fill the data frame with dipslayed data of the task.
+One  fills the number of pieces of each rock type on the each level and computes
+total number of specimens. 
+
+```{r Task 1 set the data}
+# 
+
+# distribution of rocks due to levels
+df = data.frame(Level =factor(c("F1", "F2", "F3")) , 
+                Brown=c(5,1,1), Green=c(2, 1, 6), White=c(1,2,9),
+                prob_F = c(0.25, 0.5,0.25))
+total = c(sum(df[1,c(2:4)]),sum(df[2,c(2:4)]),sum(df[3,c(2:4)]))
+df = cbind(df,total)
+df
+```
+### Compute frequencies.
+Here's the data frame with computed frequencies of each rock type on each level.
+
+```{r Task 1 probabilities }
+# probabilities 
+prbs_ = data.frame(Level = factor(c("F1", "F2", "F3")),
+                  Brown = df$Brown %o% 1/df$total,
+                  Green = df$Green %o% 1/df$total,
+                  White = df$White %o% 1/df$total,
+                  total = df$total)
+prbs_
+```
+### Compute $Pr[colour]$
+Now one can compute required probabilities for desired rock type. Since it's 
+not complicated, probabilities for all 3 rock types are calculated.
+```{r Task 1 brown rock from F}
+# to obtain brown rock from F
+Pr_brown = df[1,5] * prbs_[1,2] + df[2,5] * prbs_[2,2] + df[3,5] * prbs_[3,2]  
+(paste(" The probability for the brown rock type :",Pr_brown))
+```
+
+
+```{r Task 1 green rock}
+# to obtain green rock from F
+Pr_green = df[1,5] * prbs_[1,3] + df[2,5] * prbs_[2,3] + df[3,5] * prbs_[3,3]  
+
+(paste(" The probability for the green rock type :",Pr_green))
+```
+
+
+```{r Task 1 white rock }
+# to obtain white rock from F
+Pr_white = df[1,5] * prbs_[1,4] + df[2,5] * prbs_[2,4] + df[3,5] * prbs_[3,4]  
+(paste(" The probability for the white rock type :",Pr_white))
+```
+In order to prove correctness of calculations, it's desired to check whether
+those probabilities form the full group and mutually exclusive.
+It's obvious that one gets one of 3 rock types. 
+Probability of getting nothing is not considered.
+So, $P[color] = {P[brown]+P[green]+ P[white]} = 1$ .
+
+```{r Task 1 tab}
+#Join into the table
+Pr_colour = data.frame(
+  Level = factor("F") , 
+  Brown=Pr_brown, 
+  Green=Pr_green,
+  White=Pr_white,
+  prob_F = "---",
+  total = sum(Pr_brown, Pr_green, Pr_white))
+# as one can see result is proved as sum of probabilities for each rock equals 1  
+df = rbind(df, Pr_colour)
+df
+```
+As one can see result is proved as sum of probabilities for each rock equals 1 as 
+well as sum along  the rows for each F.
+
+```{r Task 1 F}
+F = rbind(prbs_, Pr_colour[,-5]) %>%
+  mutate(total_Pr= c(sum(prbs_[1,c(2:4)]),
+                  sum(prbs_[2,c(2:4)]),
+                  sum(prbs_[3,c(2:4)]),
+                  sum(Pr_brown, Pr_green, Pr_white)))
+
+F = F[, -5]
+F
+```
+As final output, one obtains:
+
+```{r Task 1 results}
+results = F[4,]
+results
+```
+
+
+
+# Task 2. Conjugate Priors.
+
+## Problem set.
+1. Compute posterior hyperparameters
+
+2. What is the probability of no earthquake next year?
+
+## Initial preparations.
+The data is presented as  spreadsheet CSV-file: earthquakes_USGS.csv
+One has interest in recordings which satisfy following requirements:
+
+1. The earthquake hazard of magnitude is higher than 6.
+2. Regions of interest are Northwestern Europe and Mediterranean.
+
+
+## Theoretical background.
+
+Poisson distribution relates to one of discrete types of probability distributions
+and models the number of occurring events per time interval. The average time 
+between events is known but the exact timing of events is random. 
+Furthermore, it's used for series of events with a low  probability( p<0.1).
+
+* Poisson distribution $PO(\lambda) = \frac{\lambda^k * e^{-\lambda}}{k!}$
+* Poisson process  $X \sim PO(\lambda)$.
+* Intensity of event flow/ average number of event per time period is $\lambda$ 
+
+Since the rate of occurrence of earthquakes remains the same during the 
+whole year, the hazard rate doesn't change as well.
+Due to that fact and considering that prior has  a gamma distribution,
+one can model earthquakes with Poisson distribution and conjugacy principle 
+yields that posterior has a negative binomial distribution.
+
+Conjugate priors  help to reduce Bayesian updating.
+That is, only  hyperparameters of priors are updated, avoiding integral calculations.
+Though calculation of posterior for each $\theta$ makes computations of the posterior
+expensive.
+Using  conjugacy one can avoid that kind of computations by adding the number of 
+acceptances and rejections to the existing parameters $\alpha$ and $\beta$.
+One should consider that multiplication is more expensive than summation.
+
+
+
+
+## Workflow.
+### Load the dataset and explore it.
+```{r Task 2 data, include=T}
+# load data
+eqk = read.csv("earthquakes_USGS.csv", skip=2)
+#check
+names(eqk)
+```
+Check 5 first rows.
+```{r Task 2 Head}
+kable(head(eqk))
+```
+Short statistic summary.
+```{r summary, include=T}
+summary(eqk)
+```
+Select desired data using conditions as filters, check for nulls, get short
+statistic summary. Firstly, for Europe...
+
+```{r Task 2 filter data Northwestern Europe, include=T}
+# filter data for Northwestern Europe and Mediterranean
+# Northwestern Europe
+North_Eur = eqk[(eqk$region>=532 & eqk$region<=549 & (eqk$magnitude>6)),]
+head(North_Eur)
+nrow(North_Eur)
+sum(is.null(North_Eur))
+summary(North_Eur)
+```
+
+... secondly, for Mediterranean.
+```{r Task 2 filter data Mediterranean, include=T}
+# Mediterranean
+Mediterr = eqk[eqk$region>=376 & eqk$region<=401& (eqk$magnitude>6),] 
+head(Mediterr )
+nrow(Mediterr)
+summary(Mediterr)
+sum(is.null(Mediterr))
+```
+### Consider  physics of $X$. 
+The Poisson distribution with parameters $\lambda$ and $k$ is used
+to  model earthquake hazards occurrence. 
+
+
+* Number of earthquake / time span $Z$ ∼ $Po(\lambda)$
+
+* $f(k, \lambda) = \frac{\lambda^ke^{-\lambda}}{k!}$
+
+* Number of events in each interval is $k$.
+```{r Task 2 set prior parameters, include=T}
+
+# set prior parameters
+a0 = 0
+b0 = 0
+
+# number of success events for each region
+
+# Northwestern Europe
+kE = nrow(North_Eur)
+
+# Mediterranean
+kM =  nrow(Mediterr)
+
+# number of years 
+nperiods = 2007 - 1900 +9/12
+
+# return period
+T = 1 /nperiods
+(paste("The return period is ",round(T, 3)))
+```
+### Computation of cojugate posteriors for each region
+As mentioned before, the future number of earthquake hazards is modeled through
+Poisson distribution.Thus one can use conjugacy where posterior is computed through 
+negative binomial  and conjugate prior distribution  through inverse gamma distribution.
+The advantage of such approach is a simplification of computations.
+The main parameters  of that described below.
+
+* The negative binomial distribution $X ∼ NB(x|\alpha, \dfrac{1}{1+\beta})$
+
+* The probability mass function of negative binomial distribution $$f(k, n , p) = \begin{pmatrix}
+k + n - 1 \\
+n - 1 
+\end{pmatrix} * p^{n} * (1-p)^{k}$$
+
+* Number of failures $k$ 
+
+* Number of  events of interest$\alpha$ 
+
+* Interval $\beta$   
+
+* Total occurrences in intervals $n$ = $\dfrac{\alpha}{\beta}$ 
+
+* Probability of success $p$ = $\dfrac{1}{(1 + \beta)}$ 
+
+* The posterior hyperparameters for a negative binomial distribution 
+
+$$a_0 + \sum_{i=1}^n x_i, b_0 + n$$
+
+One starts with defining hyperparameters for both regions.
+
+```{r Task 2 updating hyperparameters, include=T}
+# updating hyperparameters for each region 
+
+# Northwestern Europe
+xbar_kE = kE / nperiods
+a_kE = a0 + (xbar_kE*nperiods)
+b_kE = b0 + nperiods
+
+# Mediterranean
+xbar_kM = kM / nperiods
+a_kM = a0 + (xbar_kM*nperiods)
+b_kM = b0 + nperiods
+```
+
+
+```{r Task 2 probability of no  earthquake next year Northwestern Europe, include=T}
+# probability of no  earthquake next year
+
+# Northwestern Europe
+f_kE =  0 # failure
+n_kE = a_kE/nperiods # number of success
+prob_kE = 1/(1+b_kE) # probability of of single success outcome
+p_0_kE = dnbinom(f_kE, size = n_kE, prob = prob_kE )
+(paste("Probability of no earthquake next year in the region of Northwestern Europe",p_0_kE))
+(paste("~",round(p_0_kE, 3) * 100,"%"))
+
+
+```
+
+
+```{r Task 2 probability of no  earthquake next year  Mediterranean, include=T}
+# Mediterranean
+f_kM =  0 # failure
+n_kM = a_kM/nperiods # number of success
+prob_kM = 1/(1+b_kM) # probability of of single success outcome
+p_0_kM = dnbinom(f_kM, size = n_kM, prob = prob_kM )
+(paste("Probability of no earthquake next year in the region of Mediterranean",p_0_kM))
+(paste("~",round(p_0_kM, 3) * 100,"%"))
+
+```
+Now one sets $\theta$ in order to a conjugate prior for each region by inverse gamma distribution.
+
+```{r Model a conjugate prior by inverse gamma distribution, include=T}
+# Model a conjugate prior for each region by inverse gamma distribution
+theta =  seq(0,1000, by=1)
+
+```
+The inverse gamma distribution can be described by following parameters.
+* Inverse gamma distribution $X \sim IG(\alpha, \beta)$
+
+* pdf is $f(\lambda) = \dfrac{r_0^{\alpha_0}}{\Gamma(a_0)}\lambda^{\alpha_0 - 1} \exp(-\beta_0 \lambda)$
+
+* shape parameter : $\alpha$  
+* scale parameter : $\beta$
+
+Thus, one computes the highest probability  for each region.
+```{r Task 2 conjugate prior Northwestern Europe, include=T}
+# conjugate prior Northwestern Europe
+conj_pr_kE = dinvgamma(theta, a_kE, b_kE)
+max_kE = which.max(conj_pr_kE)
+conj_pr_kE[max_kE] # or simply use max()
+theta[max_kE]
+lambda_kE = 1/theta[max_kE]
+
+(paste("The highest probability is ", round(conj_pr_kE[max_kE],3)*100,"%",
+       "occuring at return period ",theta[max_kE], " or lambda ",round(lambda_kE,4)))
+
+```
+
+
+```{r Task 2 conjugate prior Mediterranean, include=T}
+
+# conjugate prior Mediterranean
+conj_pr_kM = dinvgamma(theta, a_kM, b_kM)
+max_kM = which.max(conj_pr_kM)
+max_kM
+
+conj_pr_kM[max_kM] # or simply use max()
+theta[max_kM]
+lambda_kM = 1/theta[max_kM]
+lambda_kM
+# The highest probability is 29.59% occurring at return period 5 or lambda 0.2
+(paste("The highest probability is ", round(conj_pr_kE[max_kM],3)*100,"%",
+       "occuring at return period ",theta[max_kM], " or lambda ",round(lambda_kM,4)))
+```
+
+Finally, it's helpful to visualize the results for each region.
+```{r Task 2 plot1, include=T}
+# plot
+# par(mfrow=c(2,1))
+
+plot(theta, conj_pr_kE, main = "Conjugate prior modeled by
+inverse gamma distribution for  Northwestern Europe", ylab="density",
+     xlab="return period",    type = "l",col="green" )
+points(theta[max_kE],conj_pr_kE[max_kE], col=2, pch =19 )
+abline(h=conj_pr_kE[max_kE], lty=3)
+abline(v=theta[max_kE], lty=3)
+
+
+
+```
+
+
+                                      Figure 2.
+
+```{r Task 2 plot2, include=T}
+plot(theta, conj_pr_kM, main = "Conjugate prior modeled by
+inverse gamma distribution for  Mediterranean", ylab="density",
+xlab="return period",    type = "l", col="blue", xlim =c(0, 200))
+points(theta[max_kM],conj_pr_kM[max_kM], col=2, pch =19 )
+abline(h=conj_pr_kM[max_kM], lty=3)
+abline(v=theta[max_kM], lty=3)
+```
+
+
+                                            Figure 3.
+
+
+# Task 3. Importance sampling II.
+## Problem set.
+1. Compute the mean, the variance and the pdf with an importance sampling.
+2. Compare with theoretical results.
+
+## Initial preparations.
+One considers the following case:
+
+Let $X \sim Beta(\alpha = 3, \beta = 7)$be the proportion of Ilmenite grains in 
+rutiles in a heavy mineral concentrate, domain(X)=(a; b) bounded.
+Target distribution $f_X(x)$ is difficult to simulate, but reference model
+$g_X(x)$ easy to simulate, and $f_X(x)=g_X(x)$ cheap to compute for each x.
+
+## Theoretical background.
+
+Importance sampling is a general method for estimating properties of a particular
+distribution. One generates samples through a different distribution than the distribution of interest.
+
+## Workflow.
+### Sample generation. 
+One begins with generating samples from uniform distribution $U \sim Unif(a,b)$.
+```{r Task 3 create sample of uniform distribution , include=T}
+# Create sample of uniform distribution
+u = runif(5000)
+```
+### Set up of beta distribution parameters and computation of weights.
+Then it's required to define parameters of beta distributions for $f_X(x)$ and $g_X(x)$
+and compute weights $w_s$.
+The beta distribution is a family of continuous probability distributions defined on the interval [0, 1] parametrized by two positive shape parameters, \alpha and  \beta.
+Considering the initial conditions, beta distribution is an appropriate distribution
+to model the random behavior of percentages and proportions.
+
+* Beta distribution $X \sim Beta(\alpha, \beta)$
+
+```{r Task 3 Set paramters and compute weights, include=T}
+# parameters for g(x)
+alpha_gx = 0.5
+beta_gx = 0.5
+
+# parameters for f(x)
+alpha_fx = 3
+beta_fx = 7
+
+# compute weights
+w = dbeta(u, shape1 = alpha_fx, shape2 = beta_fx)/dbeta(u, shape1 = alpha_gx, shape2 = beta_gx)
+# integrate
+w = w / sum(w)
+```
+
+### Computation of mean value and variance through  Monte Carlo approximation .
+Monte Carlo approximation is  $\widehat{T(x)} = \sum^S_{s=1} w_sT(u_s)$
+
+* Theoretical mean is $E[X] = \dfrac{a}{(a+b)}$
+
+One can approximate the expected value $E[X]$ using sample mean.
+
+
+```{r Task 3 Mean}
+# Mean estimate and true mean
+mu_E = u %*% w
+mu_t = alpha_fx / (alpha_fx + beta_fx)
+(paste("Approximation of expected value: ",mu_E))
+(paste("Theoretical expected value: ",mu_t))
+```
+Consequently, theoretical variance :
+
+* $Var[X] = \dfrac{ab}{(a+b)^2 (a+b+1)}$
+
+
+```{r Task 3  Variance}
+# Variance approximation and true variance
+var_E = (u-c(mu_E))^2 %*% w   
+var_t = (alpha_fx * beta_fx)/((alpha_fx + beta_fx)^2*(alpha_fx + beta_fx+1)) # true
+(paste("Variance approximation: ",var_E))
+(paste("True variance: ",var_t))
+```
+
+### Kernel density estimate.
+Then one computes kernel density estimate in order to compare it with results of MC approximation.
+
+```{r Task3 KDE}
+# density
+dd = density(u, weights = w, from=0, to=1)
+
+#Plot KDE
+plot(dd, xlab = "Weights", ylab="Density",
+main = "Importance sampling(II) of Ilmenite grains in
+(supposed) Rutiles in a heavy mineral concentrate.", lty=1,col=4)
+
+# Plot MC
+lines(dd$x, dbeta(dd$x, shape1 = alpha_fx, shape2 = beta_fx), lty=3,col=2)
+legend("topright", col = c(4,2),lty = c(1,3), c("KDE", "Monte Carlo") )
+```
+
+
+                                      Figure 4.
+
+One can observe some discrepancies between distributions,
+more significant than in case Importance sampling(I),though it's pretty close. 
+The plot is presented below. That leads to the conclusion that importance sampling(I) is a little bit more reliable.
+
+Also setting of seed as well as parameters alpha and beta affect
+on difference between the curves.
+
+```{r Task3 Importance Sampling I}
+un = runif(5000)
+wf = dbeta(un, shape1 = alpha_fx, shape2 = beta_fx)
+wf = wf/sum(wf)
+(mn=un %*% wf)
+ddf = density(un, weights = wf, from=0, to=1)
+plot(ddf, xlab = "Weights", ylab="Density",
+     main = "Importance sampling (I) of Ilmenite grains in
+(supposed) Rutiles in a heavy mineral concentrate.", lty=1,col=4)
+lines(ddf$x, dbeta(ddf$x, shape1 = 3, shape2 = 7), col=2)
+legend("topright", col = c(4,2),lty = c(1,3), c("KDE", "Monte Carlo") )
+```
+
+
+                                    Figure 5.
+
+# Task 4. Markov Chain Monte Carlo(MCMC).
+## Problem set.
+Give confidence intervals for the arithmetic mean and the
+population variability of X, assuming $Y = ln(X) ∼ N(µ; σ^2)$
+
+## Initial preparations.
+Provided data consists of :
+
+ * 30 measurements of $X = \{ppm\quad Cd\quad in\quad Sphalerite\}$
+ * log-mean $\mu_y = 3.442$ 
+ * log-variance $\sigma^2_y = 2.182$
+```{r Task 4 Setup}
+# setup
+n = 30
+ln_mean = 3.442
+ln_var = 2.182
+```
+## Theoretical background.
+Markov Chain Monte Carlo simulation unites a family of algorithms for systematic 
+random sampling from high-dimensional(multivariate) probability distributions.
+
+There's a group of algorithms of MCMC, but here Gibbs Sampling algorithm is considered. The idea of that approach is to construct a Markov Chain where the probability of next sample(next state) is computed as the conditional probability given the prior. This algorithm helps to simplify calculations in case of multivariate distribution. Because such sampling of such joint distribution is difficult, one computes discrete conditional distribution sampling of $p(x|y)$. 
+
+One can describe the process by following steps:
+
+1. Initialize $(x^0 , y^0)$
+
+2. keep variable $y^0$ fixed then sample $x^{1} \sim p(x^{1}|y^0)$
+
+3. carry on with the second step and sample for $y^1 \sim p(y^1|x^1)$
+
+4. Run chain for n steps until it reaches its stationary distribution. 
+
+5. Upon convergence, all additional steps draw from the stationary distribution 
+$p(\theta|x)$.
+
+
+## Workflow.
+### MC sequence.
+One starts with defining MC sequence by random initialization:
+
+$\tau^{0} = \frac{1}{2\sigma^2}$
+```{r Task4 setup}
+
+# setup
+n = 30
+ln_mean = 3.442
+ln_var = 2.182
+
+# define MC steps
+iters = 5000
+
+# exponentiate var
+vr = exp(ln_var)
+
+# construct an empty matrix of results for iterations
+# init y0 and tau - Markov chain sequence
+y = rep(0.0, iters)
+tau = rep(0.0, iters)
+
+# set the value of the first element
+tau[1] = round(1 / (2*vr),3)
+
+```
+### Gibbs sampling algorithm.
+Then one calculates through n iterations (large enough, here 5000 times).
+Normal and gamma distributions are used to simulate conditional probability.
+Each loop iteration is described by sequence below:
+
+* draw a sample of $\mu^{k+1} | \tau^k \quad \sim N(\overline{y}; \dfrac{1}{N\tau^k})$ then assign it to $y^1$
+
+* draw a sample of $\tau^{k+1}| \mu^{k+1} \sim \Gamma(a=\dfrac{N}{2;} r=SSQ)$ then assign it to $\tau^1$ where $SSQ = ((N − 1)s_y^2 + N(\mu^{k+1} − \overline{y})^2)^{−1}$
+
+
+```{r Task 4}
+# Gibbs sampling
+
+i = 2 # or use for{} but end with i=2:(iters - 1)
+while (i<iters) {
+  mu = ln_mean
+  sigma = sqrt(1/(2*n*tau[i-1]))
+  y[i] = rnorm(1,mu, sigma )
+  
+  SSQ = ((n-1)* ln_var + n*(y[i] - ln_mean)**2)
+  a = n/2
+  r = SSQ
+  tau[i] = rgamma(n=1, shape = a, scale = r )
+  i=i+1
+}
+# Describe tau and y
+print("Tau:")
+summary(tau)
+print("Y:")
+summary(y)
+```
+### The visualization before burn=in and thinning.
+
+
+```{r Task 4 The visualization of Y before burn-in and thinning.}
+
+# Visualization
+
+#par(mfrow=c(2,1))
+plot(y, xlab =" index", ylab = "Y",col=2,type = "l",
+     main = "Probability of Y\n before Burn-in and Thinning")
+
+```
+
+                                        Figure 6.
+```{r Task 4 The visualization of Tau before burn-in and thinning.}
+plot(tau, xlab =" index", ylab = "Tau",col=2,type = "l",
+     main = "Probability of Tau\n before Burn-in and Thinning")
+
+```
+
+                                  Figure 7.
+
+### Burn-in and thinning.
+One uses burn-in technique to throw away some iterations at the start of MCMC.
+That helps to get rid of influence of the initial value.
+
+The idea behind thinning is to pick separate points from sample at each iteration step. One separates the points from Markov chain, thus the dependence is reduced and sample becomes independent. 
+
+
+```{r Task 4 Burn-in and thinning }
+# Burn-in and thinning 
+# Burn-in effect by removing the first k elements
+# thinning effect with 20 steps
+k=iters/25 +1
+step_sz = 20
+tk = seq(from= k, to=iters, by=step_sz)
+tk
+
+tau_tk = tau[tk]
+y_tk = y[tk]
+
+```
+Now it's reasonable to visualize the results to compare before- and after-
+
+```{r Task 4 The visualization of Tau after burn-in and thinning. }
+#par(mfrow=c(2,1))
+plot(y_tk, xlab =" index", ylab = "Y",col=2,type = "l",
+     main = "Probability of Y\n after Burn-in and Thinning")
+```
+
+
+                                  Figure 8.
+```{r Task 4 The visualization of Y after burn-in and thinning. }
+plot(tau_tk, xlab =" index", ylab = "Tau",col=2,type = "l",
+     main = "Probability of Tau\n after Burn-in and Thinning")
+```
+
+
+                              Figure 9.
+Comparing figures yields the conclusion that the impact of the initial value and the periodicity of the realizations have been drastically decreased.
+
+### Expectation value and variance.
+
+Expectation value and variance are computed through:
+
+* $E[X]= exp(\mu_y + \dfrac{\sigma^2_y}{2})$
+* $Var[X] = (E[X])^2 * (exp(\sigma^2_y) - 1)$
+```{r Task 4 E[X] and Var[X]}
+# Confidence intervals for MC sample
+sigma_sqr = 1 / (2 * tau)
+
+E_x = exp(y + 0.5 * sigma_sqr)
+Var_x = E_x^2 *(exp(sigma_sqr) - 1)
+
+print("Expectation value: ")
+summary(E_x)
+
+print("Variance: ")
+summary(Var_x)
+
+```
+
+
+```{r Task 4 CI}
+quantiles = c(0.025, 0.05, 0.95, 0.975)
+
+# Confidence intervals for E[X]
+q_E_x = quantile(E_x,quantiles)
+print(" Confidence intervals for E[X]: ")
+print(q_E_x)
+# Confidence intervals for Var[X]
+q_Var_x = quantile(Var_x,quantiles)
+print(" Confidence intervals for Var[X]: ")
+print(q_Var_x)
+```
+
+
